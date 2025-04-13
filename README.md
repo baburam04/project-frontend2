@@ -1,11 +1,79 @@
-# Sample Snack app
+# Online To-Do List with User Authentication
 
-Open the `App.js` file to start writing some code. You can preview the changes directly on your phone or tablet by scanning the **QR code** or use the iOS or Android emulators. When you're done, click **Save** and share the link!
+This is the frontend application for the Sticky List project, designed to interact seamlessly with the [Sticky List backend](https://github.com/baburam04/sticky-list). Built using React Native and Expo, this mobile application allows users to manage and interact with their sticky notes efficiently.
 
-When you're ready to see everything that Expo provides (or if you want to use your own editor) you can **Download** your project and use it with [expo cli](https://docs.expo.dev/get-started/installation/#expo-cli)).
+## Features
 
-All projects created in Snack are publicly available, so you can easily share the link to this project via link, or embed it on a web page with the `<>` button.
+- **React Native with Expo**: Leverages the power of React Native for cross-platform mobile development and Expo for streamlined development and testing.
+- **Modular Architecture**:
+  - `assets/`: Contains images, fonts, and other static resources.
+  - `components/`: Reusable UI components.
+  - `screens/`: Application screens or views.
+  - `services/`: Handles API calls and business logic.
+- **Integration with Backend**: Communicates with the Sticky List backend to fetch, create, update, and delete sticky notes.
+- **Responsive Design**: Ensures a consistent user experience across different device sizes.
 
-If you're having problems, you can tweet to us [@expo](https://twitter.com/expo) or ask in our [forums](https://forums.expo.dev/c/expo-dev-tools/61) or [Discord](https://chat.expo.dev/).
+## Getting Started
 
-Snack is Open Source. You can find the code on the [GitHub repo](https://github.com/expo/snack).
+### Prerequisites
+
+- [Node.js](https://nodejs.org/) (version 14 or later)
+- [npm](https://www.npmjs.com/) or [Yarn](https://yarnpkg.com/)
+- [Expo CLI](https://docs.expo.dev/get-started/installation/) installed globally:
+
+  ```bash
+  npm install -g expo-cli
+  ```
+
+### Installation
+
+1. **Clone the repository**:
+
+   ```bash
+   git clone https://github.com/baburam04/project-frontend.git
+   cd project-frontend
+   ```
+
+2. **Install dependencies**:
+
+   ```bash
+   npm install
+   # or
+   yarn install
+   ```
+
+3. **Start the development server**:
+
+   ```bash
+   expo start
+   ```
+
+   This will start the Expo development server and provide options to run the app on an emulator, simulator, or physical device.
+
+## Project Structure
+
+```plaintext
+project-frontend/
+├── assets/             # Static assets like images and fonts
+├── components/         # Reusable UI components
+├── screens/            # Application screens or views
+├── services/           # API calls and business logic
+├── App.js              # Entry point of the application
+├── app.json            # Expo configuration
+├── babel.config.js     # Babel configuration
+├── package.json        # Project metadata and dependencies
+├── .gitignore          # Specifies files to ignore in Git
+```
+
+## Contributing
+
+Contributions are welcome! Please fork the repository and submit a pull request for any enhancements or bug fixes.
+
+## License
+
+This project is licensed under the [MIT License](LICENSE).
+
+## Contact
+
+For any questions or suggestions, please open an issue or contact [baburam04](https://github.com/baburam04).
+
