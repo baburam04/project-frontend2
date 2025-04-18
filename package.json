@@ -2,6 +2,8 @@
   "license": "0BSD",
   "main": "index.js",
   "scripts": {
+    "build": "react-scripts build",
+    "start": "react-scripts start",
     "start": "expo start",
     "android": "expo start --android",
     "ios": "expo start --ios",
