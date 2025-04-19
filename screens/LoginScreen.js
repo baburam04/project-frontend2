@@ -1,9 +1,19 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
+import { 
+  View, 
+  Text, 
+  TextInput, 
+  TouchableOpacity, 
+  Alert, 
+  StyleSheet,
+  Keyboard,
+  ActivityIndicator
+} from "react-native";
 import AsyncStorage from "@react-native-async-storage/async-storage";
-import api from "../services/api";
+import { useNavigation } from "@react-navigation/native";
+import { setAuthToken } from "../services/api"; // Import from your api.js
 
-export default function LoginScreen({ navigation }) {
+export default function LoginScreen() {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [showPassword, setShowPassword] = useState(false);
@@ -13,19 +23,18 @@ export default function LoginScreen({ navigation }) {
     password: false
   });
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const navigation = useNavigation();
 
   // Validation rules
   const validate = () => {
     const newErrors = {};
     
-    // Email validation
-    if (!email) {
+    if (!email.trim()) {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Please enter a valid email address";
+      newErrors.email = "Please enter a valid email";
     }
     
-    // Password validation
     if (!password) {
       newErrors.password = "Password is required";
     } else if (password.length < 6) {
@@ -36,7 +45,6 @@ export default function LoginScreen({ navigation }) {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Validate on input change
   useEffect(() => {
     if (Object.keys(touched).length > 0) {
       validate();
@@ -49,29 +57,48 @@ export default function LoginScreen({ navigation }) {
   };
 
   const handleLogin = async () => {
+    Keyboard.dismiss();
     setIsSubmitting(true);
-    const isValid = validate();
-    if (!isValid) {
+    
+    if (!validate()) {
       setIsSubmitting(false);
       return;
     }
 
     try {
-      const response = await api.post("/api/auth/login", { email, password });
-      await AsyncStorage.setItem("token", response.data.token);
+      const response = await api.post("/api/auth/login", { 
+        email: email.trim().toLowerCase(), 
+        password 
+      });
+      
+      // Use the setAuthToken function from api.js
+      await setAuthToken(response.data.token);
+      
+      // Clear form and navigate
+      setEmail("");
+      setPassword("");
       navigation.navigate("Checklists");
     } catch (error) {
-      Alert.alert(
-        "Login Failed", 
-        error.response?.data?.message || "Invalid email or password"
-      );
+      let errorMessage = "Login failed. Please try again.";
+      
+      if (error.response) {
+        if (error.response.status === 401) {
+          errorMessage = "Invalid email or password";
+        } else if (error.response.data?.message) {
+          errorMessage = error.response.data.message;
+        }
+      } else if (error.request) {
+        errorMessage = "Network error - please check your connection";
+      }
+      
+      Alert.alert("Login Error", errorMessage);
     } finally {
       setIsSubmitting(false);
     }
   };
 
   return (
-    <View style={styles.container}>
+    <View style={styles.container} accessibilityLabel="Login screen">
       <Text style={styles.title}>Sticky Notes</Text>
       
       {/* Email Input */}
@@ -83,14 +110,24 @@ export default function LoginScreen({ navigation }) {
           onBlur={() => handleBlur("email")}
           style={[
             styles.input,
-            touched.email && errors.email ? styles.inputError : null
+            touched.email && errors.email && styles.inputError
           ]}
-          placeholderTextColor="#4CAF50"
+          placeholderTextColor="#888"
           keyboardType="email-address"
           autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          textContentType="emailAddress"
+          accessibilityLabel="Email input"
+          accessibilityHint="Enter your email address"
+          importantForAutofill="yes"
+          id="loginEmailInput"
+          name="loginEmail"
         />
         {touched.email && errors.email && (
-          <Text style={styles.errorText}>{errors.email}</Text>
+          <Text style={styles.errorText} accessibilityLiveRegion="polite">
+            {errors.email}
+          </Text>
         )}
       </View>
       
@@ -98,7 +135,7 @@ export default function LoginScreen({ navigation }) {
       <View>
         <View style={[
           styles.passwordContainer,
-          touched.password && errors.password ? styles.inputError : null
+          touched.password && errors.password && styles.inputError
         ]}>
           <TextInput
             placeholder="Password"
@@ -107,12 +144,21 @@ export default function LoginScreen({ navigation }) {
             onBlur={() => handleBlur("password")}
             secureTextEntry={!showPassword}
             style={styles.passwordInput}
-            placeholderTextColor="#4CAF50"
+            placeholderTextColor="#888"
             autoCapitalize="none"
+            autoCorrect={false}
+            autoComplete="password"
+            textContentType="password"
+            accessibilityLabel="Password input"
+            accessibilityHint="Enter your password"
+            importantForAutofill="yes"
+            id="loginPasswordInput"
+            name="loginPassword"
           />
           <TouchableOpacity 
             onPress={() => setShowPassword(!showPassword)} 
             style={styles.showPasswordButton}
+            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
           >
             <Text style={styles.showPasswordText}>
               {showPassword ? "Hide" : "Show"}
@@ -120,26 +166,39 @@ export default function LoginScreen({ navigation }) {
           </TouchableOpacity>
         </View>
         {touched.password && errors.password && (
-          <Text style={styles.errorText}>{errors.password}</Text>
+          <Text style={styles.errorText} accessibilityLiveRegion="polite">
+            {errors.password}
+          </Text>
         )}
       </View>
       
       <TouchableOpacity 
         style={[
           styles.loginButton,
-          (Object.keys(errors).length > 0 || isSubmitting) ? styles.disabledButton : null
+          (Object.keys(errors).length > 0 || isSubmitting) && styles.disabledButton
         ]} 
         onPress={handleLogin}
         disabled={Object.keys(errors).length > 0 || isSubmitting}
+        accessibilityRole="button"
+        accessibilityLabel={isSubmitting ? "Logging in" : "Login button"}
+        accessibilityState={{ disabled: isSubmitting || Object.keys(errors).length > 0 }}
       >
-        <Text style={styles.loginButtonText}>
-          {isSubmitting ? "Logging in..." : "Login"}
-        </Text>
+        {isSubmitting ? (
+          <ActivityIndicator color="#fff" />
+        ) : (
+          <Text style={styles.loginButtonText}>Login</Text>
+        )}
       </TouchableOpacity>
       
-      <Text style={styles.link} onPress={() => navigation.navigate("Register")}>
-        Don't have an account? Sign Up
-      </Text>
+      <TouchableOpacity 
+        onPress={() => navigation.navigate("Register")}
+        accessibilityRole="button"
+        accessibilityLabel="Navigate to sign up screen"
+      >
+        <Text style={styles.link}>
+          Don't have an account? Sign Up
+        </Text>
+      </TouchableOpacity>
     </View>
   );
 }
@@ -164,8 +223,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 5,
     borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
-    color: "#2E7D32",
+    backgroundColor: "#fff",
+    color: "#333",
   },
   inputError: {
     borderColor: "#f44336",
@@ -176,13 +235,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#A5D6A7",
     borderRadius: 10,
-    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    backgroundColor: "#fff",
     marginBottom: 5,
   },
   passwordInput: {
     flex: 1,
     padding: 12,
-    color: "#2E7D32",
+    color: "#333",
   },
   showPasswordButton: {
     padding: 12,
@@ -192,14 +251,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   loginButton: {
-    backgroundColor: "rgba(46, 125, 50, 0.85)",
-    paddingVertical: 12,
+    backgroundColor: "#2E7D32",
+    paddingVertical: 15,
     borderRadius: 10,
     alignItems: "center",
     marginTop: 10,
   },
   disabledButton: {
-    backgroundColor: "rgba(46, 125, 50, 0.5)",
+    backgroundColor: "#81C784",
   },
   loginButtonText: {
     color: "#fff",
@@ -210,6 +269,7 @@ const styles = StyleSheet.create({
     marginTop: 15,
     textAlign: "center",
     color: "#388E3C",
+    textDecorationLine: "underline",
   },
   errorText: {
     color: "#f44336",
