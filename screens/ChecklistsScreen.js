@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
@@ -7,11 +7,12 @@ import {
   FlatList, 
   TextInput,
   Keyboard,
-  Alert
+  Alert,
+  ActivityIndicator
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
-import { useNavigation } from '@react-navigation/native';
+import { useNavigation, useFocusEffect } from '@react-navigation/native';
 import api from '../services/api';
 
 const ChecklistsScreen = () => {
@@ -20,13 +21,43 @@ const ChecklistsScreen = () => {
   const [newChecklistName, setNewChecklistName] = useState('');
   const [showInput, setShowInput] = useState(false);
   const [isOnline, setIsOnline] = useState(true);
+  const [isLoading, setIsLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const navigation = useNavigation();
   
-  // Logout function with confirmation dialog
-  const handleLogout = () => {
-    console.log('Simple logout called');
-    navigation.navigate('Login'); // Basic navigation first
+  // Load token and checklists when screen focuses
+  useFocusEffect(
+    useCallback(() => {
+      const loadData = async () => {
+        setIsLoading(true);
+        try {
+          const token = await AsyncStorage.getItem('token');
+          if (!token) {
+            handleLogout();
+            return;
+          }
+          await loadChecklists();
+        } catch (error) {
+          console.error('Initial load error:', error);
+          Alert.alert('Error', 'Failed to load data');
+        } finally {
+          setIsLoading(false);
+        }
+      };
+      loadData();
+    }, [])
+  );
+
+  const handleLogout = async () => {
+    try {
+      await AsyncStorage.multiRemove(['token', 'checklists']);
+      navigation.navigate('Login');
+    } catch (error) {
+      console.error('Logout error:', error);
+      Alert.alert('Error', 'Failed to logout');
+    }
   };
+
   // Set header options with logout button
   useEffect(() => {
     navigation.setOptions({
@@ -42,39 +73,53 @@ const ChecklistsScreen = () => {
     });
   }, [navigation]);
 
+  const loadChecklists = async () => {
+    try {
+      const response = await api.get('/api/checklists');
+      const formattedChecklists = response.data.checklists.map(item => ({
+        id: item._id,
+        title: item.title,
+        createdAt: item.createdAt,
+        taskCount: item.taskCount || 0
+      }));
+      setChecklists(formattedChecklists);
+      await AsyncStorage.setItem('checklists', JSON.stringify(formattedChecklists));
+      setIsOnline(true);
+    } catch (error) {
+      console.log('API failed:', error.response?.data || error.message);
+      setIsOnline(false);
+      
+      if (error.response?.status === 401) {
+        Alert.alert('Session Expired', 'Please login again');
+        handleLogout();
+        return;
+      }
+      
+      try {
+        const localChecklists = await AsyncStorage.getItem('checklists');
+        if (localChecklists) {
+          setChecklists(JSON.parse(localChecklists));
+        }
+      } catch (localError) {
+        console.error('Failed to load local checklists:', localError);
+        Alert.alert('Error', 'Failed to load checklists');
+      }
+    } finally {
+      setRefreshing(false);
+    }
+  };
+
+  const handleRefresh = () => {
+    setRefreshing(true);
+    loadChecklists();
+  };
+
   const navigateToDashboard = (checklist) => {
     navigation.navigate('Dashboard', { 
       checklistId: checklist.id, 
       checklistTitle: checklist.title 
     });
   };
-  // Load checklists from storage
-  useEffect(() => {
-    const loadChecklists = async () => {
-      try {
-        // Try to load from API first
-        const response = await api.get('/api/checklists');
-        setChecklists(response.data.checklists);
-        // Save the fresh data to local storage
-        await AsyncStorage.setItem('checklists', JSON.stringify(response.data.checklists));
-        setIsOnline(true);
-      } catch (error) {
-        console.log('API failed, falling back to local storage');
-        setIsOnline(false);
-        // Fallback to local storage
-        try {
-          const localChecklists = await AsyncStorage.getItem('checklists');
-          if (localChecklists) {
-            setChecklists(JSON.parse(localChecklists));
-          }
-        } catch (localError) {
-          console.error('Failed to load local checklists:', localError);
-          Alert.alert('Error', 'Failed to load checklists');
-        }
-      }
-    };
-    loadChecklists();
-  }, []);
 
   // Filter checklists based on search query
   const filteredChecklists = checklists.filter(checklist =>
@@ -85,53 +130,81 @@ const ChecklistsScreen = () => {
   const createChecklist = async () => {
     if (!newChecklistName.trim()) return;
     
+    Keyboard.dismiss();
+    
+    const tempId = Date.now().toString();
     const newChecklist = {
-      id: Date.now().toString(),
+      id: tempId,
       title: newChecklistName.trim(),
-      createdAt: new Date().toISOString()
+      createdAt: new Date().toISOString(),
+      taskCount: 0
     };
 
     // Optimistic update
-    const updatedChecklists = [newChecklist, ...checklists];
-    setChecklists(updatedChecklists);
+    setChecklists(prev => [newChecklist, ...prev]);
     
     try {
       if (isOnline) {
-        // Try API first
         const response = await api.post('/api/checklists', {
           title: newChecklistName.trim()
         });
-        // Update with the server-generated ID if needed
-        setChecklists([response.data.checklist, ...checklists]);
+        // Replace with server data
+        setChecklists(prev => [
+          {
+            id: response.data.checklist._id,
+            title: response.data.checklist.title,
+            createdAt: response.data.checklist.createdAt,
+            taskCount: 0
+          },
+          ...prev.filter(item => item.id !== tempId)
+        ]);
       }
-      // Save to local storage regardless of online status
-      await AsyncStorage.setItem('checklists', JSON.stringify(updatedChecklists));
+      // Save to local storage
+      await AsyncStorage.setItem('checklists', JSON.stringify([newChecklist, ...checklists]));
     } catch (error) {
-      console.log('Failed to sync with server, keeping local changes');
+      console.log('Failed to sync with server:', error);
       setIsOnline(false);
+      Alert.alert('Error', 'Failed to create checklist');
+      // Revert optimistic update if API fails
+      setChecklists(prev => prev.filter(item => item.id !== tempId));
     }
     
     setNewChecklistName('');
     setShowInput(false);
-    Keyboard.dismiss();
   };
 
   // Delete checklist
   const deleteChecklist = async (checklistId) => {
-    // Optimistic update
-    const updatedChecklists = checklists.filter(item => item.id !== checklistId);
-    setChecklists(updatedChecklists);
-    
-    try {
-      if (isOnline) {
-        await api.delete(`/api/checklists/${checklistId}`);
-      }
-      // Update local storage
-      await AsyncStorage.setItem('checklists', JSON.stringify(updatedChecklists));
-    } catch (error) {
-      console.log('Failed to sync delete with server, keeping local changes');
-      setIsOnline(false);
-    }
+    Alert.alert(
+      'Delete Checklist',
+      'Are you sure you want to delete this checklist?',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete',
+          style: 'destructive',
+          onPress: async () => {
+            // Optimistic update
+            setChecklists(prev => prev.filter(item => item.id !== checklistId));
+            
+            try {
+              if (isOnline) {
+                await api.delete(`/api/checklists/${checklistId}`);
+              }
+              // Update local storage
+              const updated = checklists.filter(item => item.id !== checklistId);
+              await AsyncStorage.setItem('checklists', JSON.stringify(updated));
+            } catch (error) {
+              console.log('Failed to sync delete:', error);
+              setIsOnline(false);
+              // Revert if error
+              setChecklists(checklists);
+              Alert.alert('Error', 'Failed to delete checklist');
+            }
+          }
+        }
+      ]
+    );
   };
 
   // Render each checklist item
@@ -142,9 +215,14 @@ const ChecklistsScreen = () => {
     >
       <View style={styles.checklistContent}>
         <Text style={styles.checklistTitle}>{item.title}</Text>
-        <Text style={styles.checklistDate}>
-          Created: {new Date(item.createdAt).toLocaleDateString()}
-        </Text>
+        <View style={styles.checklistMeta}>
+          <Text style={styles.checklistDate}>
+            {new Date(item.createdAt).toLocaleDateString()}
+          </Text>
+          <Text style={styles.taskCount}>
+            {item.taskCount} {item.taskCount === 1 ? 'task' : 'tasks'}
+          </Text>
+        </View>
       </View>
       <TouchableOpacity
         style={styles.deleteButton}
@@ -154,6 +232,14 @@ const ChecklistsScreen = () => {
       </TouchableOpacity>
     </TouchableOpacity>
   );
+
+  if (isLoading) {
+    return (
+      <View style={styles.loadingContainer}>
+        <ActivityIndicator size="large" color="#007AFF" />
+      </View>
+    );
+  }
 
   return (
     <View style={styles.container}>
@@ -214,6 +300,8 @@ const ChecklistsScreen = () => {
             {searchQuery ? 'No matching checklists found' : 'No checklists yet'}
           </Text>
         }
+        refreshing={refreshing}
+        onRefresh={handleRefresh}
       />
 
       {/* Add Checklist Button */}
@@ -235,7 +323,12 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5E9",
     padding: 16,
   },
-  // Add logout button style
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: "#E8F5E9",
+  },
   logoutButton: {
     marginRight: 15,
   },
@@ -325,9 +418,17 @@ const styles = StyleSheet.create({
     color: '#000',
     marginBottom: 4,
   },
+  checklistMeta: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+  },
   checklistDate: {
     fontSize: 13,
     color: '#888',
+  },
+  taskCount: {
+    fontSize: 13,
+    color: '#007AFF',
   },
   deleteButton: {
     padding: 8,
