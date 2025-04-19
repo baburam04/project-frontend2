@@ -13,23 +13,18 @@ const api = axios.create({
 });
 
 // Request interceptor to add auth token
-api.interceptors.request.use(
-  async (config) => {
-    try {
-      const token = await AsyncStorage.getItem('token');
-      if (token) {
-        config.headers.Authorization = `Bearer ${token}`;
-      }
-      return config;
-    } catch (error) {
-      console.error('Error getting token:', error);
-      return Promise.reject(error);
-    }
-  },
-  (error) => {
-    return Promise.reject(error);
+api.interceptors.request.use(async (config) => {
+  const token = await AsyncStorage.getItem('token');
+  if (token) {
+    config.headers.Authorization = `Bearer ${token}`;
+    config.headers['Access-Control-Allow-Origin'] = '*'; // Add CORS header
+    config.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,PATCH,OPTIONS';
+    config.headers['Access-Control-Allow-Headers'] = 'Content-Type, Authorization';
   }
-);
+  return config;
+}, (error) => {
+  return Promise.reject(error);
+});
 
 // Response interceptor to handle errors
 api.interceptors.response.use(
