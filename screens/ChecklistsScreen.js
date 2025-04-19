@@ -7,19 +7,11 @@ import {
   FlatList, 
   TextInput,
   Keyboard,
-  Alert,
-  Animated
+  Alert
 } from 'react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import Icon from 'react-native-vector-icons/MaterialIcons';
 import { useNavigation } from '@react-navigation/native';
-import { GestureHandlerRootView, Swipeable } from 'react-native-gesture-handler';
-import DraggableFlatList, {
-  ScaleDecorator,
-  ShadowDecorator,
-  OpacityDecorator,
-  useOnCellActiveAnimation,
-} from 'react-native-draggable-flatlist';
 import api from '../services/api';
 
 const ChecklistsScreen = () => {
@@ -35,7 +27,6 @@ const ChecklistsScreen = () => {
     console.log('Simple logout called');
     navigation.navigate('Login'); // Basic navigation first
   };
-
   // Set header options with logout button
   useEffect(() => {
     navigation.setOptions({
@@ -57,17 +48,15 @@ const ChecklistsScreen = () => {
       checklistTitle: checklist.title 
     });
   };
-
   // Load checklists from storage
   useEffect(() => {
     const loadChecklists = async () => {
       try {
         // Try to load from API first
         const response = await api.get('/api/checklists');
-        const sortedChecklists = response.data.checklists.sort((a, b) => a.order - b.order);
-        setChecklists(sortedChecklists);
+        setChecklists(response.data.checklists);
         // Save the fresh data to local storage
-        await AsyncStorage.setItem('checklists', JSON.stringify(sortedChecklists));
+        await AsyncStorage.setItem('checklists', JSON.stringify(response.data.checklists));
         setIsOnline(true);
       } catch (error) {
         console.log('API failed, falling back to local storage');
@@ -76,9 +65,7 @@ const ChecklistsScreen = () => {
         try {
           const localChecklists = await AsyncStorage.getItem('checklists');
           if (localChecklists) {
-            const parsedChecklists = JSON.parse(localChecklists);
-            const sortedChecklists = parsedChecklists.sort((a, b) => (a.order || 0) - (b.order || 0));
-            setChecklists(sortedChecklists);
+            setChecklists(JSON.parse(localChecklists));
           }
         } catch (localError) {
           console.error('Failed to load local checklists:', localError);
@@ -101,8 +88,7 @@ const ChecklistsScreen = () => {
     const newChecklist = {
       id: Date.now().toString(),
       title: newChecklistName.trim(),
-      createdAt: new Date().toISOString(),
-      order: checklists.length > 0 ? Math.max(...checklists.map(c => c.order || 0)) + 1 : 0
+      createdAt: new Date().toISOString()
     };
 
     // Optimistic update
@@ -113,8 +99,7 @@ const ChecklistsScreen = () => {
       if (isOnline) {
         // Try API first
         const response = await api.post('/api/checklists', {
-          title: newChecklistName.trim(),
-          order: newChecklist.order
+          title: newChecklistName.trim()
         });
         // Update with the server-generated ID if needed
         setChecklists([response.data.checklist, ...checklists]);
@@ -149,166 +134,98 @@ const ChecklistsScreen = () => {
     }
   };
 
-  // Handle reordering of checklists
-  const handleReorder = async ({ data }) => {
-    // Update order property for each item
-    const reorderedData = data.map((item, index) => ({
-      ...item,
-      order: index
-    }));
-    
-    setChecklists(reorderedData);
-    
-    try {
-      if (isOnline) {
-        await api.patch('/api/checklists/reorder', { checklists: reorderedData });
-      }
-      // Save to local storage
-      await AsyncStorage.setItem('checklists', JSON.stringify(reorderedData));
-    } catch (error) {
-      console.log('Failed to sync reorder with server, keeping local changes');
-      setIsOnline(false);
-    }
-  };
-
-  // Render delete action for swipeable item
-  const renderRightActions = (progress, dragX, checklistId) => {
-    const trans = dragX.interpolate({
-      inputRange: [0, 50, 100, 101],
-      outputRange: [0, 0, 0, 1],
-    });
-    
-    return (
-      <TouchableOpacity 
-        style={styles.deleteSwipeContainer}
-        onPress={() => deleteChecklist(checklistId)}
+  // Render each checklist item
+  const renderChecklistItem = ({ item }) => (
+    <TouchableOpacity
+      style={styles.checklistItem}
+      onPress={() => navigateToDashboard(item)}
+    >
+      <View style={styles.checklistContent}>
+        <Text style={styles.checklistTitle}>{item.title}</Text>
+        <Text style={styles.checklistDate}>
+          Created: {new Date(item.createdAt).toLocaleDateString()}
+        </Text>
+      </View>
+      <TouchableOpacity
+        style={styles.deleteButton}
+        onPress={() => deleteChecklist(item.id)}
       >
-        <Animated.View 
-          style={[
-            styles.deleteSwipeButton,
-            {
-              transform: [{ translateX: trans }],
-            },
-          ]}
-        >
-          <Icon name="delete" size={24} color="white" />
-        </Animated.View>
+        <Icon name="delete" size={20} color="#FF3B30" />
       </TouchableOpacity>
-    );
-  };
-
-  // Render each checklist item with drag and swipe functionality
-  const renderChecklistItem = ({ item, drag, isActive }) => {
-    return (
-      <ScaleDecorator>
-        <ShadowDecorator>
-          <OpacityDecorator activeOpacity={0.5}>
-            <Swipeable
-              renderRightActions={(progress, dragX) => 
-                renderRightActions(progress, dragX, item.id)
-              }
-              rightThreshold={40}
-            >
-              <TouchableOpacity
-                style={[
-                  styles.checklistItem,
-                  isActive && styles.draggingItem
-                ]}
-                onLongPress={drag}
-                onPress={() => navigateToDashboard(item)}
-                activeOpacity={1}
-              >
-                <View style={styles.dragHandle}>
-                  <Icon name="drag-handle" size={24} color="#888" />
-                </View>
-                <View style={styles.checklistContent}>
-                  <Text style={styles.checklistTitle}>{item.title}</Text>
-                  <Text style={styles.checklistDate}>
-                    Created: {new Date(item.createdAt).toLocaleDateString()}
-                  </Text>
-                </View>
-              </TouchableOpacity>
-            </Swipeable>
-          </OpacityDecorator>
-        </ShadowDecorator>
-      </ScaleDecorator>
-    );
-  };
+    </TouchableOpacity>
+  );
 
   return (
-    <GestureHandlerRootView style={{ flex: 1 }}>
-      <View style={styles.container}>
-        {/* Offline indicator */}
-        {!isOnline && (
-          <View style={styles.offlineBar}>
-            <Text style={styles.offlineText}>Offline Mode - Changes will sync when online</Text>
-          </View>
-        )}
-        
-        {/* Search Bar */}
-        <View style={styles.searchContainer}>
-          <Icon name="search" size={20} color="#888" style={styles.searchIcon} />
+    <View style={styles.container}>
+      {/* Offline indicator */}
+      {!isOnline && (
+        <View style={styles.offlineBar}>
+          <Text style={styles.offlineText}>Offline Mode - Changes will sync when online</Text>
+        </View>
+      )}
+      
+      {/* Search Bar */}
+      <View style={styles.searchContainer}>
+        <Icon name="search" size={20} color="#888" style={styles.searchIcon} />
+        <TextInput
+          style={styles.searchInput}
+          placeholder="Search checklists..."
+          value={searchQuery}
+          onChangeText={setSearchQuery}
+          placeholderTextColor="#888"
+        />
+        {searchQuery ? (
+          <TouchableOpacity onPress={() => setSearchQuery('')}>
+            <Icon name="close" size={20} color="#888" />
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
+      {/* New Checklist Input */}
+      {showInput && (
+        <View style={styles.inputContainer}>
           <TextInput
-            style={styles.searchInput}
-            placeholder="Search checklists..."
-            value={searchQuery}
-            onChangeText={setSearchQuery}
+            style={styles.textInput}
+            placeholder="Enter checklist name"
+            value={newChecklistName}
+            onChangeText={setNewChecklistName}
+            autoFocus={true}
+            onSubmitEditing={createChecklist}
             placeholderTextColor="#888"
           />
-          {searchQuery ? (
-            <TouchableOpacity onPress={() => setSearchQuery('')}>
-              <Icon name="close" size={20} color="#888" />
-            </TouchableOpacity>
-          ) : null}
-        </View>
-
-        {/* New Checklist Input */}
-        {showInput && (
-          <View style={styles.inputContainer}>
-            <TextInput
-              style={styles.textInput}
-              placeholder="Enter checklist name"
-              value={newChecklistName}
-              onChangeText={setNewChecklistName}
-              autoFocus={true}
-              onSubmitEditing={createChecklist}
-              placeholderTextColor="#888"
-            />
-            <TouchableOpacity 
-              style={styles.createButton} 
-              onPress={createChecklist}
-              disabled={!newChecklistName.trim()}
-            >
-              <Text style={styles.createButtonText}>Create</Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
-        {/* Checklists List */}
-        <DraggableFlatList
-          data={filteredChecklists}
-          renderItem={renderChecklistItem}
-          keyExtractor={item => item.id}
-          onDragEnd={handleReorder}
-          contentContainerStyle={styles.listContainer}
-          ListEmptyComponent={
-            <Text style={styles.emptyText}>
-              {searchQuery ? 'No matching checklists found' : 'No checklists yet'}
-            </Text>
-          }
-        />
-
-        {/* Add Checklist Button */}
-        {!showInput && (
           <TouchableOpacity 
-            style={styles.addButton} 
-            onPress={() => setShowInput(true)}
+            style={styles.createButton} 
+            onPress={createChecklist}
+            disabled={!newChecklistName.trim()}
           >
-            <Icon name="add" size={30} color="white" />
+            <Text style={styles.createButtonText}>Create</Text>
           </TouchableOpacity>
-        )}
-      </View>
-    </GestureHandlerRootView>
+        </View>
+      )}
+
+      {/* Checklists List */}
+      <FlatList
+        data={filteredChecklists}
+        renderItem={renderChecklistItem}
+        keyExtractor={item => item.id}
+        contentContainerStyle={styles.listContainer}
+        ListEmptyComponent={
+          <Text style={styles.emptyText}>
+            {searchQuery ? 'No matching checklists found' : 'No checklists yet'}
+          </Text>
+        }
+      />
+
+      {/* Add Checklist Button */}
+      {!showInput && (
+        <TouchableOpacity 
+          style={styles.addButton} 
+          onPress={() => setShowInput(true)}
+        >
+          <Icon name="add" size={30} color="white" />
+        </TouchableOpacity>
+      )}
+    </View>
   );
 };
 
@@ -318,6 +235,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5E9",
     padding: 16,
   },
+  // Add logout button style
   logoutButton: {
     marginRight: 15,
   },
@@ -387,6 +305,7 @@ const styles = StyleSheet.create({
   checklistItem: {
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'space-between',
     backgroundColor: '#fff',
     borderRadius: 10,
     padding: 16,
@@ -396,17 +315,6 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 3,
     elevation: 2,
-  },
-  draggingItem: {
-    backgroundColor: '#f0f0f0',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 5,
-  },
-  dragHandle: {
-    marginRight: 10,
   },
   checklistContent: {
     flex: 1,
@@ -421,18 +329,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: '#888',
   },
-  deleteSwipeContainer: {
-    width: 80,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  deleteSwipeButton: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: '#FF3B30',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderRadius: 10,
+  deleteButton: {
+    padding: 8,
   },
   emptyText: {
     textAlign: 'center',
