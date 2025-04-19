@@ -4,7 +4,8 @@
   "scripts": {
     "start": "expo start",
     "web": "expo start --web",
-    "build:web": "expo build:web"
+    "build": "expo build:web",
+    "serve": "serve web-build"
   },
   "dependencies": {
     "@expo/vector-icons": "^14.0.2",
