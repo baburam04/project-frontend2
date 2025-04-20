@@ -1,20 +1,8 @@
 import React, { useState, useEffect } from "react";
-import { 
-  View, 
-  Text, 
-  TextInput, 
-  TouchableOpacity, 
-  Alert, 
-  StyleSheet,
-  Keyboard,
-  ActivityIndicator
-} from "react-native";
-import { useNavigation } from "@react-navigation/native";
-import { setAuthToken } from "../services/api";
+import { View, Text, TextInput, TouchableOpacity, Alert, StyleSheet } from "react-native";
 import api from "../services/api";
 
-export default function RegisterScreen() {
-  const [name, setName] = useState("");
+export default function RegisterScreen({ navigation }) {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [confirmPassword, setConfirmPassword] = useState("");
@@ -22,57 +10,54 @@ export default function RegisterScreen() {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [errors, setErrors] = useState({});
   const [touched, setTouched] = useState({
-    name: false,
     email: false,
     password: false,
     confirmPassword: false
   });
-  const [isSubmitting, setIsSubmitting] = useState(false);
-  const navigation = useNavigation();
 
   // Validation rules
   const validate = () => {
     const newErrors = {};
     
-    if (!name.trim()) {
-      newErrors.name = "Name is required";
-    }
-
-    if (!email.trim()) {
+    // Email validation
+    if (!email) {
       newErrors.email = "Email is required";
     } else if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
-      newErrors.email = "Please enter a valid email";
+      newErrors.email = "Please enter a valid email address";
     }
     
+    // Password validation
     if (!password) {
       newErrors.password = "Password is required";
     } else if (password.length < 8) {
-      newErrors.password = "Must be at least 8 characters";
+      newErrors.password = "Password must be at least 8 characters";
     } else if (!/[A-Z]/.test(password)) {
-      newErrors.password = "Needs at least one uppercase letter";
+      newErrors.password = "Password must contain at least one uppercase letter";
     } else if (!/[a-z]/.test(password)) {
-      newErrors.password = "Needs at least one lowercase letter";
+      newErrors.password = "Password must contain at least one lowercase letter";
     } else if (!/[0-9]/.test(password)) {
-      newErrors.password = "Needs at least one number";
+      newErrors.password = "Password must contain at least one number";
     } else if (!/[^A-Za-z0-9]/.test(password)) {
-      newErrors.password = "Needs at least one special character";
+      newErrors.password = "Password must contain at least one special character";
     }
     
+    // Confirm password validation
     if (!confirmPassword) {
       newErrors.confirmPassword = "Please confirm your password";
     } else if (password !== confirmPassword) {
-      newErrors.confirmPassword = "Passwords don't match";
+      newErrors.confirmPassword = "Passwords do not match";
     }
     
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
+  // Validate on input change
   useEffect(() => {
     if (Object.keys(touched).length > 0) {
       validate();
     }
-  }, [name, email, password, confirmPassword, touched]);
+  }, [email, password, confirmPassword, touched]);
 
   const handleBlur = (field) => {
     setTouched({ ...touched, [field]: true });
@@ -80,85 +65,21 @@ export default function RegisterScreen() {
   };
 
   const handleRegister = async () => {
-    Keyboard.dismiss();
-    setIsSubmitting(true);
-    
-    if (!validate()) {
-      setIsSubmitting(false);
-      return;
-    }
+    const isValid = validate();
+    if (!isValid) return;
 
     try {
-      const response = await api.post("/api/auth/register", { 
-        name: name.trim(),
-        email: email.trim().toLowerCase(), 
-        password 
-      });
-      
-      // Automatically log in user after registration
-      await setAuthToken(response.data.token);
-      
-      Alert.alert(
-        "Registration Successful", 
-        "Your account has been created!",
-        [{ text: "OK", onPress: () => navigation.navigate("Checklists") }]
-      );
-      
-      // Clear form
-      setName("");
-      setEmail("");
-      setPassword("");
-      setConfirmPassword("");
+      await api.post("/api/auth/register", { email, password });
+      Alert.alert("Success", "Account created successfully!");
+      navigation.navigate("Login");
     } catch (error) {
-      let errorMessage = "Registration failed. Please try again.";
-      
-      if (error.response) {
-        if (error.response.status === 400 && error.response.data?.message) {
-          errorMessage = error.response.data.message;
-        } else if (error.response.status === 409) {
-          errorMessage = "Email already exists";
-        }
-      } else if (error.request) {
-        errorMessage = "Network error - please check your connection";
-      }
-      
-      Alert.alert("Registration Error", errorMessage);
-    } finally {
-      setIsSubmitting(false);
+      Alert.alert("Registration Failed", error.response?.data?.message || "An error occurred");
     }
   };
 
   return (
-    <View style={styles.container} accessibilityLabel="Registration screen">
+    <View style={styles.container}>
       <Text style={styles.title}>Create an Account</Text>
-      
-      {/* Name Input */}
-      <View>
-        <TextInput
-          placeholder="Full Name"
-          value={name}
-          onChangeText={setName}
-          onBlur={() => handleBlur("name")}
-          style={[
-            styles.input,
-            touched.name && errors.name && styles.inputError
-          ]}
-          placeholderTextColor="#888"
-          autoCapitalize="words"
-          autoComplete="name"
-          textContentType="name"
-          accessibilityLabel="Full name input"
-          accessibilityHint="Enter your full name"
-          importantForAutofill="yes"
-          id="registerNameInput"
-          name="registerName"
-        />
-        {touched.name && errors.name && (
-          <Text style={styles.errorText} accessibilityLiveRegion="polite">
-            {errors.name}
-          </Text>
-        )}
-      </View>
       
       {/* Email Input */}
       <View>
@@ -169,23 +90,14 @@ export default function RegisterScreen() {
           onBlur={() => handleBlur("email")}
           style={[
             styles.input,
-            touched.email && errors.email && styles.inputError
+            touched.email && errors.email ? styles.inputError : null
           ]}
-          placeholderTextColor="#888"
+          placeholderTextColor="#4CAF50"
           keyboardType="email-address"
           autoCapitalize="none"
-          autoComplete="email"
-          textContentType="emailAddress"
-          accessibilityLabel="Email input"
-          accessibilityHint="Enter your email address"
-          importantForAutofill="yes"
-          id="registerEmailInput"
-          name="registerEmail"
         />
         {touched.email && errors.email && (
-          <Text style={styles.errorText} accessibilityLiveRegion="polite">
-            {errors.email}
-          </Text>
+          <Text style={styles.errorText}>{errors.email}</Text>
         )}
       </View>
       
@@ -193,7 +105,7 @@ export default function RegisterScreen() {
       <View>
         <View style={[
           styles.passwordContainer,
-          touched.password && errors.password && styles.inputError
+          touched.password && errors.password ? styles.inputError : null
         ]}>
           <TextInput
             placeholder="Password"
@@ -202,30 +114,15 @@ export default function RegisterScreen() {
             onBlur={() => handleBlur("password")}
             secureTextEntry={!showPassword}
             style={styles.passwordInput}
-            placeholderTextColor="#888"
+            placeholderTextColor="#4CAF50"
             autoCapitalize="none"
-            autoComplete="password-new"
-            textContentType="newPassword"
-            accessibilityLabel="Password input"
-            accessibilityHint="Enter a password with at least 8 characters, including uppercase, lowercase, number, and special character"
-            importantForAutofill="yes"
-            id="registerPasswordInput"
-            name="registerPassword"
           />
-          <TouchableOpacity 
-            onPress={() => setShowPassword(!showPassword)} 
-            style={styles.showPasswordButton}
-            accessibilityLabel={showPassword ? "Hide password" : "Show password"}
-          >
-            <Text style={styles.showPasswordText}>
-              {showPassword ? "Hide" : "Show"}
-            </Text>
+          <TouchableOpacity onPress={() => setShowPassword(!showPassword)} style={styles.showPasswordButton}>
+            <Text style={styles.showPasswordText}>{showPassword ? "Hide" : "Show"}</Text>
           </TouchableOpacity>
         </View>
         {touched.password && errors.password && (
-          <Text style={styles.errorText} accessibilityLiveRegion="polite">
-            {errors.password}
-          </Text>
+          <Text style={styles.errorText}>{errors.password}</Text>
         )}
       </View>
       
@@ -233,7 +130,7 @@ export default function RegisterScreen() {
       <View>
         <View style={[
           styles.passwordContainer,
-          touched.confirmPassword && errors.confirmPassword && styles.inputError
+          touched.confirmPassword && errors.confirmPassword ? styles.inputError : null
         ]}>
           <TextInput
             placeholder="Confirm Password"
@@ -242,60 +139,32 @@ export default function RegisterScreen() {
             onBlur={() => handleBlur("confirmPassword")}
             secureTextEntry={!showConfirmPassword}
             style={styles.passwordInput}
-            placeholderTextColor="#888"
+            placeholderTextColor="#4CAF50"
             autoCapitalize="none"
-            autoComplete="password-new"
-            textContentType="newPassword"
-            accessibilityLabel="Confirm password input"
-            accessibilityHint="Re-enter your password to confirm"
-            importantForAutofill="yes"
-            id="registerConfirmPasswordInput"
-            name="registerConfirmPassword"
           />
-          <TouchableOpacity 
-            onPress={() => setShowConfirmPassword(!showConfirmPassword)} 
-            style={styles.showPasswordButton}
-            accessibilityLabel={showConfirmPassword ? "Hide password" : "Show password"}
-          >
-            <Text style={styles.showPasswordText}>
-              {showConfirmPassword ? "Hide" : "Show"}
-            </Text>
+          <TouchableOpacity onPress={() => setShowConfirmPassword(!showConfirmPassword)} style={styles.showPasswordButton}>
+            <Text style={styles.showPasswordText}>{showConfirmPassword ? "Hide" : "Show"}</Text>
           </TouchableOpacity>
         </View>
         {touched.confirmPassword && errors.confirmPassword && (
-          <Text style={styles.errorText} accessibilityLiveRegion="polite">
-            {errors.confirmPassword}
-          </Text>
+          <Text style={styles.errorText}>{errors.confirmPassword}</Text>
         )}
       </View>
       
       <TouchableOpacity 
         style={[
           styles.registerButton,
-          (Object.keys(errors).length > 0 || isSubmitting) && styles.disabledButton
+          Object.keys(errors).length > 0 ? styles.disabledButton : null
         ]} 
         onPress={handleRegister}
-        disabled={Object.keys(errors).length > 0 || isSubmitting}
-        accessibilityRole="button"
-        accessibilityLabel={isSubmitting ? "Processing registration" : "Register button"}
-        accessibilityState={{ disabled: isSubmitting || Object.keys(errors).length > 0 }}
+        disabled={Object.keys(errors).length > 0}
       >
-        {isSubmitting ? (
-          <ActivityIndicator color="#fff" />
-        ) : (
-          <Text style={styles.registerButtonText}>Register</Text>
-        )}
+        <Text style={styles.registerButtonText}>Register</Text>
       </TouchableOpacity>
       
-      <TouchableOpacity 
-        onPress={() => navigation.navigate("Login")}
-        accessibilityRole="button"
-        accessibilityLabel="Navigate to login screen"
-      >
-        <Text style={styles.link}>
-          Already have an account? Login
-        </Text>
-      </TouchableOpacity>
+      <Text style={styles.link} onPress={() => navigation.navigate("Login")}>
+        Already have an account? Login
+      </Text>
     </View>
   );
 }
@@ -320,8 +189,8 @@ const styles = StyleSheet.create({
     padding: 12,
     marginBottom: 5,
     borderRadius: 10,
-    backgroundColor: "#fff",
-    color: "#333",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
+    color: "#2E7D32",
   },
   inputError: {
     borderColor: "#f44336",
@@ -332,13 +201,13 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#A5D6A7",
     borderRadius: 10,
-    backgroundColor: "#fff",
+    backgroundColor: "rgba(255, 255, 255, 0.8)",
     marginBottom: 5,
   },
   passwordInput: {
     flex: 1,
     padding: 12,
-    color: "#333",
+    color: "#2E7D32",
   },
   showPasswordButton: {
     padding: 12,
@@ -348,14 +217,14 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
   },
   registerButton: {
-    backgroundColor: "#2E7D32",
-    paddingVertical: 15,
+    backgroundColor: "rgba(46, 125, 50, 0.85)",
+    paddingVertical: 12,
     borderRadius: 10,
     alignItems: "center",
     marginTop: 10,
   },
   disabledButton: {
-    backgroundColor: "#81C784",
+    backgroundColor: "rgba(46, 125, 50, 0.5)",
   },
   registerButtonText: {
     color: "#fff",
@@ -366,7 +235,6 @@ const styles = StyleSheet.create({
     marginTop: 15,
     textAlign: "center",
     color: "#388E3C",
-    textDecorationLine: "underline",
   },
   errorText: {
     color: "#f44336",
