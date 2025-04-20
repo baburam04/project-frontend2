@@ -72,7 +72,7 @@ export default function LoginScreen({ navigation }) {
 
   return (
     <View style={styles.container}>
-      <Text style={styles.title}>Sticky Notes</Text>
+      <Text style={styles.title}>Online To-Do List</Text>
       
       {/* Email Input */}
       <View>
