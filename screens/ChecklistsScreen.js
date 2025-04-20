@@ -157,12 +157,6 @@ const ChecklistsScreen = () => {
 
   return (
     <View style={styles.container}>
-      {/* Offline indicator */}
-      {!isOnline && (
-        <View style={styles.offlineBar}>
-          <Text style={styles.offlineText}>Offline Mode - Changes will sync when online</Text>
-        </View>
-      )}
       
       {/* Search Bar */}
       <View style={styles.searchContainer}>
@@ -239,16 +233,7 @@ const styles = StyleSheet.create({
   logoutButton: {
     marginRight: 15,
   },
-  offlineBar: {
-    backgroundColor: '#FFCC00',
-    padding: 10,
-    marginBottom: 16,
-    borderRadius: 5,
-  },
-  offlineText: {
-    color: '#000',
-    textAlign: 'center',
-  },
+
   searchContainer: {
     flexDirection: 'row',
     alignItems: 'center',
