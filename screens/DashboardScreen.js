@@ -177,13 +177,7 @@ const DashboardScreen = ({ navigation }) => {
 
   return (
     <View style={styles.container}>
-      {/* Offline indicator */}
-      {!isOnline && (
-        <View style={styles.offlineBar}>
-          <Text style={styles.offlineText}>Offline Mode - Changes will sync when online</Text>
-        </View>
-      )}
-      
+
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()}>
           <Icon name="arrow-back" size={24} color="#333" />
@@ -250,16 +244,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#E8F5E9",
     padding: 20,
   },
-  offlineBar: {
-    backgroundColor: '#FFCC00',
-    padding: 10,
-    marginBottom: 16,
-    borderRadius: 5,
-  },
-  offlineText: {
-    color: '#000',
-    textAlign: 'center',
-  },
+
   header: {
     flexDirection: 'row',
     justifyContent: 'space-between',
