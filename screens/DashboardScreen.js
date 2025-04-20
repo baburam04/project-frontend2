@@ -178,13 +178,6 @@ const DashboardScreen = ({ navigation }) => {
   return (
     <View style={styles.container}>
 
-      <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()}>
-          <Icon name="arrow-back" size={24} color="#333" />
-        </TouchableOpacity>
-        <Text style={styles.title}>{checklistTitle || 'Tasks'}</Text>
-        <View style={{ width: 24 }} /> {/* Spacer for alignment */}
-      </View>
       
       <View style={styles.inputContainer}>
         <TextInput
